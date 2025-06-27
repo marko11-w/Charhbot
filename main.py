@@ -3,6 +3,26 @@ from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeybo
 import json
 import os
 from flask import Flask, request
+import telebot
+
+app = Flask(__name__)
+bot = telebot.TeleBot(TOKEN)
+
+@app.route("/", methods=["GET"])
+def index():
+    return "Bot Running"
+
+@app.route(f"/{TOKEN}", methods=["POST"])
+def webhook():
+    update = telebot.types.Update.de_json(request.stream.read().decode("utf-8"))
+    bot.process_new_updates([update])
+    return "OK"
+
+bot.remove_webhook()
+bot.set_webhook(url=f"https://charhbot-production.up.railway.app/{TOKEN}")
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
 
 # ========== CONFIG ==========
 TOKEN = "8005206366:AAFgMzmZzSLqRlN5uN09PKpJKjHzczKWr3c"
