@@ -74,7 +74,7 @@ def fake_charge(message):
 def process_id(message):
     user_id = message.from_user.id
     bot.send_message(user_id, "🔄 جاري الاتصال بالسيرفر...")
-    bot.send_message(user_id, "✅ تم الشحن بنجاح!
+    bot.send_message(user_id, "✅ تم الشحن بنجاح!\n⚠️ هذا مجرد بوت وهمي للترفيه فقط.")
 ⚠️ هذا مجرد بوت وهمي للترفيه فقط.")
 
 @bot.message_handler(func=lambda m: m.text == "⚙️ إدارة البوت")
