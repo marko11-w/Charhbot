@@ -74,9 +74,7 @@ def fake_charge(message):
 def process_id(message):
     user_id = message.from_user.id
     bot.send_message(user_id, "جاري الاتصال بالسيرفر...")
-    bot.send_message(user_id, "تم الشحن بنجاح!
-هذا مجرد بوت وهمي للترفيه فقط.")
-
+    bot.send_message(user_id, "تم الشحن بنجاح!\nهذا مجرد بوت وهمي للترفيه فقط.")
 @bot.message_handler(func=lambda m: m.text == "إدارة البوت")
 def admin_panel(message):
     if not is_admin(message.from_user.id):
