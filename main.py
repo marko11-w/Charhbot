@@ -56,7 +56,7 @@ def start(message):
     if not check_subscription(user_id):
         join_btn = InlineKeyboardMarkup()
         join_btn.add(InlineKeyboardButton("اشترك في القناة 📢", url=f"https://t.me/{CHANNEL_USERNAME}"))
-        bot.send_message(user_id, "⚠️ يجب عليك الاشتراك في القناة أولاً لاستخدام البوت", reply_markup=join_btn)
+        bot.send_message(user_id, "يجب عليك الاشتراك في القناة أولاً لاستخدام البوت", reply_markup=join_btn)
         return
     bot.send_message(user_id, "مرحباً بك في بوت الشحن المجاني! اختر اللعبة:", reply_markup=main_menu(user_id))
 
@@ -66,7 +66,7 @@ def fake_charge(message):
     if not check_subscription(user_id):
         join_btn = InlineKeyboardMarkup()
         join_btn.add(InlineKeyboardButton("اشترك في القناة 📢", url=f"https://t.me/{CHANNEL_USERNAME}"))
-        bot.send_message(user_id, "⚠️ يجب عليك الاشتراك أولاً لاستخدام هذا الزر", reply_markup=join_btn)
+        bot.send_message(user_id, "يجب عليك الاشتراك أولاً لاستخدام هذا الزر", reply_markup=join_btn)
         return
     msg = bot.send_message(user_id, "🔢 أرسل معرف الحساب أو رقم اللاعب:")
     bot.register_next_step_handler(msg, process_id)
@@ -74,8 +74,8 @@ def fake_charge(message):
 def process_id(message):
     user_id = message.from_user.id
     bot.send_message(user_id, "🔄 جاري الاتصال بالسيرفر...")
-    bot.send_message(user_id, "✅ تم الشحن بنجاح!\n⚠️ هذا مجرد بوت وهمي للترفيه فقط.")
-⚠️ هذا مجرد بوت وهمي للترفيه فقط.")
+    bot.send_message(user_id, "✅ تم الشحن بنجاح!
+❗ هذا مجرد بوت وهمي للترفيه فقط.")
 
 @bot.message_handler(func=lambda m: m.text == "⚙️ إدارة البوت")
 def admin_panel(message):
@@ -91,7 +91,7 @@ def admin_panel(message):
 def user_count(message):
     if not is_admin(message.from_user.id): return
     data = load_data()
-    bot.send_message(message.chat.id, f"📊 عدد المستخدمين: {len(data['users'])}")
+    bot.send_message(message.chat.id, f"عدد المستخدمين: {len(data['users'])}")
 
 @bot.message_handler(func=lambda m: m.text == "📢 رسالة جماعية")
 def broadcast(message):
