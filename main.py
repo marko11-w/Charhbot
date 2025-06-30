@@ -1,189 +1,119 @@
-import telebot
-from telebot.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
-import json
-import os
+import os, json
 from flask import Flask, request
 import telebot
+from telebot import types
+
+TOKEN = "7837218696:AAGSozPdf3hLT0bBjrgB3uExeuir-90Rvok"
+ADMIN_ID = 7758666677
+CHANNEL_USERNAME = "@MARK01i"
 
 app = Flask(__name__)
 bot = telebot.TeleBot(TOKEN)
 
-@app.route("/", methods=["GET"])
-def index():
-    return "Bot Running"
+def load_json(path, default):
+    try: return json.load(open(path, "r", encoding="utf-8"))
+    except: return default
 
-@app.route(f"/{TOKEN}", methods=["POST"])
-def webhook():
-    update = telebot.types.Update.de_json(request.stream.read().decode("utf-8"))
-    bot.process_new_updates([update])
-    return "OK"
+def save_json(path, data):
+    json.dump(data, open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 
-bot.remove_webhook()
-bot.set_webhook(url=f"https://charhbot-production.up.railway.app/{TOKEN}")
+settings = load_json("settings.json", {
+    "games": ["🎮 ببجي", "🔥 فري فاير", "⚽ بيس", "🎯 أخرى"],
+    "bot_active": True,
+    "messages": {
+        "start": "👋 أهلاً بك في بوت بيع وتبادل الحسابات.",
+        "must_subscribe": "🚫 يجب الاشتراك في القناة أولًا: @MARK01i"
+    }
+})
+banned_users = load_json("banned_users.json", [])
+pending = load_json("pending_requests.json", {})
+user_states = {}
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-
-# ========== CONFIG ==========
-TOKEN = "8005206366:AAFgMzmZzSLqRlN5uN09PKpJKjHzczKWr3c"
-ADMIN_ID = 5397568684
-CHANNEL_USERNAME = "MARK01i"
-DATA_FILE = "data.json"
-# ============================
-
-bot = telebot.TeleBot(TOKEN)
-
-# تحميل البيانات
-if not os.path.exists(DATA_FILE):
-    with open(DATA_FILE, "w") as f:
-        json.dump({"users": [], "admins": [ADMIN_ID]}, f)
-
-def load_data():
-    with open(DATA_FILE, "r") as f:
-        return json.load(f)
-
-def save_data(data):
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f)
-
-def is_admin(user_id):
-    data = load_data()
-    return user_id in data["admins"]
-
-def check_subscription(user_id):
+def is_subscribed(user_id):
     try:
-        res = bot.get_chat_member(f"@{CHANNEL_USERNAME}", user_id)
-        return res.status in ["member", "creator", "administrator"]
+        status = bot.get_chat_member(CHANNEL_USERNAME, user_id).status
+        return status in ["member", "administrator", "creator"]
     except:
         return False
-
-def main_menu(user_id):
-    markup = ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add("ببجي", "فري فاير")
-    markup.add("فورتنايت", "روبلوكس")
-    markup.add("بطاقات شحن")
-    if is_admin(user_id):
-        markup.add("إدارة البوت")
-    return markup
 
 @bot.message_handler(commands=["start"])
 def start(message):
     user_id = message.from_user.id
-    data = load_data()
-    if user_id not in data["users"]:
-        data["users"].append(user_id)
-        save_data(data)
-    if not check_subscription(user_id):
-        join_btn = InlineKeyboardMarkup()
-        join_btn.add(InlineKeyboardButton("اشترك في القناة", url=f"https://t.me/{CHANNEL_USERNAME}"))
-        bot.send_message(user_id, "يجب عليك الاشتراك في القناة أولاً لاستخدام البوت", reply_markup=join_btn)
-        return
-    bot.send_message(user_id, "مرحباً بك في بوت الشحن المجاني! اختر اللعبة:", reply_markup=main_menu(user_id))
+    if not settings["bot_active"] and user_id != ADMIN_ID:
+        return bot.send_message(user_id, "🚫 البوت متوقف مؤقتًا.")
+    if user_id in banned_users:
+        return bot.send_message(user_id, "🚫 تم حظرك.")
+    if not is_subscribed(user_id):
+        return bot.send_message(user_id, settings["messages"]["must_subscribe"])
+    bot.send_message(user_id, settings["messages"]["start"])
+    bot.send_message(user_id, "📸 أرسل صورة الحساب.")
+    user_states[user_id] = {"step": "photo"}
 
-@bot.message_handler(func=lambda m: m.text in ["ببجي", "فري فاير", "فورتنايت", "روبلوكس", "بطاقات شحن"])
-def fake_charge(message):
+@bot.message_handler(content_types=["photo"])
+def handle_photo(message):
     user_id = message.from_user.id
-    if not check_subscription(user_id):
-        join_btn = InlineKeyboardMarkup()
-        join_btn.add(InlineKeyboardButton("اشترك في القناة", url=f"https://t.me/{CHANNEL_USERNAME}"))
-        bot.send_message(user_id, "يجب عليك الاشتراك أولاً لاستخدام هذا الزر", reply_markup=join_btn)
-        return
-    msg = bot.send_message(user_id, "أرسل معرف الحساب أو رقم اللاعب:")
-    bot.register_next_step_handler(msg, process_id)
+    if user_states.get(user_id, {}).get("step") != "photo": return
+    user_states[user_id]["photo"] = message.photo[-1].file_id
+    user_states[user_id]["step"] = "desc"
+    bot.send_message(user_id, "📝 اكتب وصف الحساب:")
 
-def process_id(message):
+@bot.message_handler(func=lambda m: user_states.get(m.from_user.id, {}).get("step") == "desc")
+def handle_desc(message):
     user_id = message.from_user.id
-    bot.send_message(user_id, "جاري الاتصال بالسيرفر...")
-    bot.send_message(user_id, "تم الشحن بنجاح!\nهذا مجرد بوت وهمي للترفيه فقط.")
-@bot.message_handler(func=lambda m: m.text == "إدارة البوت")
-def admin_panel(message):
-    if not is_admin(message.from_user.id):
-        return
-    markup = ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add("عدد المستخدمين", "رسالة جماعية")
-    markup.add("إضافة أدمن", "حذف أدمن")
-    markup.add("رجوع")
-    bot.send_message(message.chat.id, "لوحة التحكم:", reply_markup=markup)
+    user_states[user_id]["desc"] = message.text
+    user_states[user_id]["step"] = "game"
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    for g in settings["games"]: markup.add(g)
+    bot.send_message(user_id, "🎮 اختر نوع اللعبة:", reply_markup=markup)
 
-@bot.message_handler(func=lambda m: m.text == "عدد المستخدمين")
-def user_count(message):
-    if not is_admin(message.from_user.id): return
-    data = load_data()
-    bot.send_message(message.chat.id, f"عدد المستخدمين: {len(data['users'])}")
+@bot.message_handler(func=lambda m: user_states.get(m.from_user.id, {}).get("step") == "game")
+def handle_game(message):
+    user_id = message.from_user.id
+    game = message.text
+    if game not in settings["games"]:
+        return bot.send_message(user_id, "❌ اختر لعبة من القائمة.")
+    user_states[user_id]["game"] = game
+    user_states[user_id]["step"] = "price"
+    bot.send_message(user_id, "💰 أدخل السعر بالدولار:")
 
-@bot.message_handler(func=lambda m: m.text == "رسالة جماعية")
-def broadcast(message):
-    if not is_admin(message.from_user.id): return
-    msg = bot.send_message(message.chat.id, "أرسل الرسالة الآن:")
-    bot.register_next_step_handler(msg, process_broadcast)
+@bot.message_handler(func=lambda m: user_states.get(m.from_user.id, {}).get("step") == "price")
+def handle_price(message):
+    user_id = message.from_user.id
+    try: price = float(message.text)
+    except: return bot.send_message(user_id, "❌ أدخل رقمًا صحيحًا.")
+    user_states[user_id]["price"] = price
+    user_states[user_id]["step"] = "confirm"
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("✅ إرسال الطلب", callback_data="confirm_submit"))
+    bot.send_message(user_id, "هل تريد إرسال الطلب؟", reply_markup=markup)
 
-def process_broadcast(message):
-    data = load_data()
-    for uid in data["users"]:
-        try:
-            bot.send_message(uid, message.text)
-        except:
-            continue
-    bot.send_message(message.chat.id, "تم إرسال الرسالة.")
-
-@bot.message_handler(func=lambda m: m.text == "إضافة أدمن")
-def add_admin(message):
-    if message.from_user.id != ADMIN_ID: return
-    msg = bot.send_message(message.chat.id, "أرسل آيدي الأدمن الجديد:")
-    bot.register_next_step_handler(msg, process_add_admin)
-
-def process_add_admin(message):
-    data = load_data()
-    try:
-        new_admin = int(message.text)
-        if new_admin not in data["admins"]:
-            data["admins"].append(new_admin)
-            save_data(data)
-            bot.send_message(message.chat.id, "تمت إضافة الأدمن.")
-        else:
-            bot.send_message(message.chat.id, "هذا المستخدم موجود مسبقاً.")
-    except:
-        bot.send_message(message.chat.id, "فشل في الإضافة.")
-
-@bot.message_handler(func=lambda m: m.text == "حذف أدمن")
-def remove_admin(message):
-    if message.from_user.id != ADMIN_ID: return
-    msg = bot.send_message(message.chat.id, "أرسل آيدي الأدمن للحذف:")
-    bot.register_next_step_handler(msg, process_remove_admin)
-
-def process_remove_admin(message):
-    data = load_data()
-    try:
-        remove_id = int(message.text)
-        if remove_id in data["admins"] and remove_id != ADMIN_ID:
-            data["admins"].remove(remove_id)
-            save_data(data)
-            bot.send_message(message.chat.id, "تم حذف الأدمن.")
-        else:
-            bot.send_message(message.chat.id, "لا يمكن حذف هذا المستخدم.")
-    except:
-        bot.send_message(message.chat.id, "فشل في الحذف.")
-
-@bot.message_handler(func=lambda m: m.text == "رجوع")
-def back(message):
-    bot.send_message(message.chat.id, "تم الرجوع إلى القائمة الرئيسية", reply_markup=main_menu(message.from_user.id))
-
-# Webhook
-app = Flask(__name__)
+@bot.callback_query_handler(func=lambda call: call.data == "confirm_submit")
+def submit_request(call):
+    user_id = call.from_user.id
+    state = user_states.get(user_id, {})
+    if not state: return
+    caption = f"📤 طلب جديد\\n🎮 {state['game']}\\n📝 {state['desc']}\\n💵 {state['price']}$\\n👤 @{call.from_user.username or 'لا يوجد'}\\n🆔 {user_id}"
+    markup = types.InlineKeyboardMarkup()
+    markup.row(
+        types.InlineKeyboardButton("✅ قبول", callback_data=f"accept_{user_id}"),
+        types.InlineKeyboardButton("❌ رفض", callback_data=f"reject_{user_id}")
+    )
+    markup.add(types.InlineKeyboardButton("✏️ تعديل", callback_data=f"edit_{user_id}"))
+    msg = bot.send_photo(ADMIN_ID, state["photo"], caption=caption, reply_markup=markup)
+    pending[str(user_id)] = {**state, "msg_id": msg.message_id}
+    save_json("pending_requests.json", pending)
+    bot.send_message(user_id, "📬 تم إرسال الطلب.")
+    user_states.pop(user_id)
 
 @app.route("/", methods=["GET"])
 def index():
-    return "Bot Running."
+    return "Bot is running", 200
 
-@app.route(f"/{TOKEN}", methods=["POST"])
+@app.route("/", methods=["POST"])
 def webhook():
-    json_string = request.get_data().decode("utf-8")
-    update = telebot.types.Update.de_json(json_string)
+    update = telebot.types.Update.de_json(request.stream.read().decode("utf-8"))
     bot.process_new_updates([update])
-    return "OK"
-
-bot.remove_webhook()
-bot.set_webhook(url="https://found.up.railway.app/" + TOKEN)
+    return "ok", 200
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
